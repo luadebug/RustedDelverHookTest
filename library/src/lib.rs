@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use winapi::um::{wincon::FreeConsole, consoleapi::AllocConsole};
 use windows::{ Win32::Foundation::*, Win32::System::SystemServices::*, };
 use crate::util::logger::Logger;

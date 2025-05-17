@@ -1,4 +1,6 @@
+
 use std::{fs::OpenOptions, time::Duration};
+use std::os::raw::c_void;
 use std::fmt::Debug;
 use std::os::windows::io::AsRawHandle;
 
@@ -10,6 +12,11 @@ use winapi::um::libloaderapi::{FreeLibraryAndExitThread, GetModuleHandleA};
 use windows::core::s;
 
 use crate::hooks::patcher;
+#[allow(
+    non_snake_case,
+    non_upper_case_globals,
+    non_camel_case_types
+)]
 use crate::jnihook::jnihook::{JNIHook_Attach, JNIHook_Init};
 use crate::modules::manager;
 use crate::modules::module::ModuleData;
@@ -411,17 +418,15 @@ extern "C" fn hk_get_walk_speed(
     jni: *mut JNIEnv,
     callable_method: jmethodID,
     args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
 ) -> jvalue {
     Logger::log("[DH] hk_get_walk_speed called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-    Logger::log("[DH] Args: ");
+    // Logger::log(format!("[DH] Number of args: {}", nargs));
+    // Logger::log("[DH] Args: ");
 
     // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
+    // let args_slice = unsafe {
+    //     std::slice::from_raw_parts(args, nargs)
+    // };
 
     // Log the arguments safely
 /*    if nargs < 1 {
@@ -429,33 +434,32 @@ extern "C" fn hk_get_walk_speed(
         return jvalue { i: 0 }; // Return early if arguments are not provided
     }*/
 
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        Logger::log(format!("[DH]  - this_ptr: {:?}", this_ptr));
-    }
-    return jvalue { f: 0.75f32 }; // Default speed is lower than this
+    // unsafe {
+    //     let this_ptr = args_slice[0].l; // Get the `this` pointer
+    //     Logger::log(format!("[DH]  - this_ptr: {:?}", this_ptr));
+    // }
+    return jvalue { f: 0.3f32 }; // Default speed is lower than this
 }
 
 
 extern "C" fn hk_get_damage_stat_boost_method(
     jni: *mut JNIEnv,
     callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
+    args: *mut jvalue
 ) -> jvalue {
-    Logger::log("[DH] hk_get_damage_stat_boost_method called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-    Logger::log("[DH] Args: ");
+    // Logger::log("[DH] hk_get_damage_stat_boost_method called!");
+    // Logger::log(format!("[DH] Number of args: {}", nargs));
+    // Logger::log("[DH] Args: ");
 
-    // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        Logger::log(format!("[DH] - this_ptr: {:?}", this_ptr));
-    }
+    //
+    // // Safety: Convert the raw pointer to a slice
+    // let args_slice = unsafe {
+        // std::slice::from_raw_parts(args, nargs)
+    // };
+    // unsafe {
+    //     let this_ptr = args_slice[0].l; // Get the `this` pointer
+    //     Logger::log(format!("[DH] - this_ptr: {:?}", this_ptr));
+    // }
 
     return jvalue { i: 99999 };
 }
@@ -553,18 +557,16 @@ extern "C" fn hk_get_magic_stat_boost_method(
 extern "C" fn hk_get_defense_stat_boost_method(
     jni: *mut JNIEnv,
     callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
+    args: *mut jvalue
 ) -> jvalue {
-    Logger::log("[DH] hk_get_magic_resist_mod_boost_method called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-    Logger::log("[DH] Args: ");
-
-    // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
+    // Logger::log("[DH] hk_get_magic_resist_mod_boost_method called!");
+    // Logger::log(format!("[DH] Number of args: {}", nargs));
+    // Logger::log("[DH] Args: ");
+    // 
+    // // Safety: Convert the raw pointer to a slice
+    // let args_slice = unsafe {
+    //     std::slice::from_raw_parts(args, nargs)
+    // };
 
     // Log the arguments safely
     /*    if nargs < 1 {
@@ -572,10 +574,10 @@ extern "C" fn hk_get_defense_stat_boost_method(
             return jvalue { i: 0 }; // Return early if arguments are not provided
         }*/
 
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        Logger::log(format!("[DH] - this_ptr: {:?}", this_ptr));
-    }
+    // unsafe {
+    //     let this_ptr = args_slice[0].l; // Get the `this` pointer
+    //     Logger::log(format!("[DH] - this_ptr: {:?}", this_ptr));
+    // }
 
     return jvalue { i: 99999 };
 }
@@ -641,7 +643,6 @@ pub unsafe fn entry() {
             /*let AttackMethod = jnienv.get_method_id(pc_ref, "Attack", "(Lcom/interrupt/dungeoneer/game/Level;)V").unwrap();*/
             let take_damage_method = jnienv.get_method_id(pc_ref, "takeDamage", "(ILcom/interrupt/dungeoneer/entities/items/Weapon$DamageType;Lcom/interrupt/dungeoneer/entities/Entity;)I").unwrap();
             let get_walk_speed_method = jnienv.get_method_id(pc_ref, "getWalkSpeed", "()F").unwrap();
-
             let get_damage_stat_boost_method = jnienv.get_method_id(pc_ref, "getDamageStatBoost", "()I").unwrap();
             let get_attack_speed_stat_boost_method = jnienv.get_method_id(pc_ref, "getAttackSpeedStatBoost", "()F").unwrap();
             let get_magic_resist_mod_boost_method = jnienv.get_method_id(pc_ref, "getMagicResistModBoost", "()F").unwrap();
@@ -664,33 +665,34 @@ pub unsafe fn entry() {
                                       std::ptr::null_mut());
             Logger::log(format!("[DH] Player::Attack Hook Result: {}", hkresult));
 */
-            hkresult = JNIHook_Attach(take_damage_method.into_raw(),
-                                      Some(hk_take_damage),
-                                      std::ptr::null_mut());
-            Logger::log(format!("[DH] Player::takeDamage Hook Result: {}", hkresult));
-            hkresult = JNIHook_Attach(get_walk_speed_method.into_raw(),
-                                      Some(hk_get_walk_speed),
-                                      std::ptr::null_mut());
-            Logger::log(format!("[DH] Player::getWalkSpeed Hook Result: {}", hkresult));
+            // JNIHook_Attach();
+            // hkresult = JNIHook_Attach(take_damage_method.into_raw(),
+            //                           hk_take_damage as *mut c_void,
+            //                           std::ptr::null_mut());
+            // Logger::log(format!("[DH] Player::takeDamage Hook Result: {}", hkresult));
+            // hkresult = JNIHook_Attach(get_walk_speed_method.into_raw(),
+            //                           hk_get_walk_speed as *mut c_void,
+            //                           std::ptr::null_mut());
+            // Logger::log(format!("[DH] Player::getWalkSpeed Hook Result: {}", hkresult));
 
             hkresult = JNIHook_Attach(get_damage_stat_boost_method.into_raw(),
-                                      Some(hk_get_damage_stat_boost_method),
+                                      hk_get_damage_stat_boost_method as *mut c_void,
                                       std::ptr::null_mut());
             Logger::log(format!("[DH] Player::getDamageStatBoost Hook Result: {}", hkresult));
-            hkresult = JNIHook_Attach(get_attack_speed_stat_boost_method.into_raw(),
-                                      Some(hk_get_attack_speed_stat_boost),
-                                      std::ptr::null_mut());
-            Logger::log(format!("[DH] Player::getAttackSpeedStatBoost Hook Result: {}", hkresult));
-            hkresult = JNIHook_Attach(get_magic_resist_mod_boost_method.into_raw(),
-                                      Some(hk_get_magic_resist_mod_boost_method),
-                                      std::ptr::null_mut());
-            Logger::log(format!("[DH] Player::get_magic_resist_mod_boost_method Hook Result: {}", hkresult));
-            hkresult = JNIHook_Attach(get_magic_stat_boost_method.into_raw(),
-                                      Some(hk_get_magic_stat_boost_method),
-                                      std::ptr::null_mut());
-            Logger::log(format!("[DH] Player::get_magic_stat_boost_method Hook Result: {}", hkresult));
+            // hkresult = JNIHook_Attach(get_attack_speed_stat_boost_method.into_raw(),
+            //                           hk_get_attack_speed_stat_boost as *mut c_void,
+            //                           std::ptr::null_mut());
+            // Logger::log(format!("[DH] Player::getAttackSpeedStatBoost Hook Result: {}", hkresult));
+            // hkresult = JNIHook_Attach(get_magic_resist_mod_boost_method.into_raw(),
+            //                           hk_get_magic_resist_mod_boost_method as *mut c_void,
+            //                           std::ptr::null_mut());
+            // Logger::log(format!("[DH] Player::get_magic_resist_mod_boost_method Hook Result: {}", hkresult));
+            // hkresult = JNIHook_Attach(get_magic_stat_boost_method.into_raw(),
+            //                           hk_get_magic_stat_boost_method as *mut c_void,
+            //                           std::ptr::null_mut());
+            // Logger::log(format!("[DH] Player::get_magic_stat_boost_method Hook Result: {}", hkresult));
             hkresult = JNIHook_Attach(get_defense_stat_boost_method.into_raw(),
-                                      Some(hk_get_defense_stat_boost_method),
+                                      hk_get_defense_stat_boost_method as *mut c_void,
                                       std::ptr::null_mut());
             Logger::log(format!("[DH] Player::get_defense_stat_boost_method Hook Result: {}", hkresult));
         }
