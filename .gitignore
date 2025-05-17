@@ -4,3 +4,8 @@ Cargo.lock
 **/*.rs.bk
 *.pdb
 rust-project.json
+/.idea/.gitignore
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/RustedDelverHookTest.iml
+/.idea/vcs.xml
