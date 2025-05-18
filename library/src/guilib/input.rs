@@ -1,5 +1,5 @@
 use clipboard::{windows_clipboard::WindowsClipboardContext, ClipboardProvider};
-use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Vec2};
+use egui::{Event, Key, Modifiers, MouseWheelUnit, PointerButton, Pos2, RawInput, Rect, Vec2, ViewportId};
 use windows::{Win32::{
     Foundation::{HWND, RECT},
     System::SystemServices::{MK_CONTROL, MK_SHIFT},
@@ -182,7 +182,11 @@ impl InputCollector {
                         .push(Event::Zoom(if delta > 0. { 1.5 } else { 0.5 }));
                     InputResult::Zoom
                 } else {
-                    self.events.push(Event::Scroll(Vec2::new(0., delta)));
+                    self.events.push(Event::MouseWheel {
+                        unit: MouseWheelUnit::Point,
+                        delta: Vec2::new(0., delta),
+                        modifiers: Default::default(),
+                    });
                     InputResult::Scroll
                 }
             }
@@ -196,7 +200,11 @@ impl InputCollector {
                         .push(Event::Zoom(if delta > 0. { 1.5 } else { 0.5 }));
                     InputResult::Zoom
                 } else {
-                    self.events.push(Event::Scroll(Vec2::new(delta, 0.)));
+                    self.events.push(Event::MouseWheel {
+                        unit: MouseWheelUnit::Point,
+                        delta: Vec2::new(delta, 0.),
+                        modifiers: Default::default(),
+                    });
                     InputResult::Scroll
                 }
             }
@@ -224,6 +232,7 @@ impl InputCollector {
                         modifiers,
                         key,
                         repeat: lparam & (KF_REPEAT as isize) > 0,
+                        physical_key: None,
                     });
                 }
                 InputResult::Key
@@ -238,6 +247,7 @@ impl InputCollector {
                         modifiers,
                         key,
                         repeat: lparam & (KF_REPEAT as isize) > 0,
+                        physical_key: None,
                     });
                 }
                 InputResult::Key
@@ -254,16 +264,18 @@ impl InputCollector {
 
     pub fn collect_input(&mut self) -> RawInput {
         RawInput {
+            viewport_id: ViewportId::ROOT,
             modifiers: self.modifiers.unwrap_or_default(),
             events: std::mem::take(&mut self.events),
             screen_rect: Some(self.get_screen_rect()),
             time: Some(Self::get_system_time()),
-            pixels_per_point: Some(1.),
             max_texture_side: None,
             predicted_dt: 1. / 60.,
             hovered_files: vec![],
             dropped_files: vec![],
-            has_focus: true,
+            focused: true,
+            viewports: std::iter::once((ViewportId::ROOT, Default::default())).collect(),
+            system_theme: None,
         }
     }
 

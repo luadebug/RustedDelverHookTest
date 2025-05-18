@@ -1,17 +1,20 @@
-
-use std::{fs::OpenOptions, time::Duration};
-use std::os::raw::c_void;
 use std::fmt::Debug;
+use std::os::raw::c_void;
 use std::os::windows::io::AsRawHandle;
-
-use jni::AttachGuard;
-use jni::objects::{JClass, JMethodID, JObject};
-use jni::signature::{Primitive, ReturnType};
-use jni::sys::{jint, jmethodID, JNI_OK, JNIEnv, jobject, jvalue};
-use winapi::um::libloaderapi::{FreeLibraryAndExitThread, GetModuleHandleA};
-use windows::core::s;
+use std::{fs::OpenOptions, time::Duration};
 
 use crate::hooks::patcher;
+use crate::jnihook::jnihook::{
+    jnihook_result_t_JNIHOOK_ERR_ADD_JVMTI_CAPS,
+    jnihook_result_t_JNIHOOK_ERR_CLASS_FILE_CACHE,
+    jnihook_result_t_JNIHOOK_ERR_GET_JNI,
+    jnihook_result_t_JNIHOOK_ERR_GET_JVMTI,
+    jnihook_result_t_JNIHOOK_ERR_JAVA_EXCEPTION,
+    jnihook_result_t_JNIHOOK_ERR_JNI_OPERATION,
+    jnihook_result_t_JNIHOOK_ERR_JVMTI_OPERATION,
+    jnihook_result_t_JNIHOOK_ERR_SETUP_CLASS_FILE_LOAD_HOOK,
+    jnihook_result_t_JNIHOOK_OK
+};
 #[allow(
     non_snake_case,
     non_upper_case_globals,
@@ -21,578 +24,122 @@ use crate::jnihook::jnihook::{JNIHook_Attach, JNIHook_Init};
 use crate::modules::manager;
 use crate::modules::module::ModuleData;
 use crate::util::logger::Logger;
-//use jnihook_sys::{JNIHook_Attach, JNIHook_Init};
+use jni::sys::{jint, jmethodID, jvalue, JNIEnv};
+use jni::AttachGuard;
+use once_cell::sync::OnceCell;
+use winapi::um::libloaderapi::{FreeLibraryAndExitThread, GetModuleHandleA};
+use windows::core::s;
 
-pub static mut JAVA_VM: Option<jni::JavaVM> = None;
-pub static mut ENV: Option<AttachGuard<'static>> = None;
-pub static mut CLASS_LOADER: Option<JObject> = None;
+// static mut JAVA_VM: OnceCell<jni::JavaVM> = OnceCell::new();
+// static mut ENV: OnceCell<AttachGuard> = OnceCell::new();
+// static mut RUNNING: bool = true;
 
-pub static mut RUNNING: bool = true;
-
-
-/*extern "C" fn hk_player_attack(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
-) -> jvalue {
-    Logger::log("[DH] hk_player_attack called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-    Logger::log("[DH] Args: {}");
-    //Logger::log(format!("[DH] - thisptr: {:?}", );
-    //Logger::log(format!("[DH] - level: {}", (*args[1]).l));
-    Logger::log("[DH] Calling original Player::Attack...");
-    //jni.CallVoidMethod
-/*    jni.CallVoidMethod(&(args.wrapping_add(0).l),
-                       callable_method,
-                       &(args.wrapping_add(1).l));*/
-    Logger::log("[DH] Called original Player::Attack");
-    jvalue {
-        i: 0,
-    }
-}*/
-/*
-extern "C" fn hk_player_attack(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
-) -> jvalue {
-    // Safety: Ensure that the JNI pointer is valid and not null
-    let mut jni_env = unsafe {
-        jni::JNIEnv::from_raw(jni).expect("Failed to convert JNIEnv from raw pointer")
-    };
-
-    // Log that the function was called
-    Logger::log("[DH] hk_player_attack called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-
-    // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
-
-    // Log the arguments safely
-    if nargs == 0 {
-        Logger::log("[DH]  - thisptr: Not provided");
-        return jvalue { i: 0 }; // Return early if this pointer is not provided
-    }
-
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        Logger::log(format!("[DH]  - thisptr: {:?}", this_ptr));
-
-        if nargs < 2 {
-            Logger::log("[DH]  - level: Not provided");
-            return jvalue { i: 0 }; // Return early if level pointer is not provided
-        }
-
-        let level_ptr = args_slice[1].l; // Get the `level` pointer
-        Logger::log(format!("[DH]  - level: {:?}", level_ptr));
-
-        // Convert raw pointers to JObject
-        let jobject_arg_obj = JObject::from_raw(this_ptr);
-        let level_ptr_obj = JObject::from_raw(level_ptr);
-
-        // Log the conversion of pointers to JObject
-        Logger::log(format!("[DH] Converted thisptr to JObject: {:?}", jobject_arg_obj));
-        Logger::log(format!("[DH] Converted level_ptr to JObject: {:?}", level_ptr_obj));
-
-        // Create JValue for both arguments
-        let jvalue_this = jni::objects::JValue::from(jobject_arg_obj.as_ref());
-        let jvalue_level = jni::objects::JValue::from(level_ptr_obj.as_ref());
-        Logger::log(format!("[DH] Created JValue for this: {:?}", jvalue_this));
-        Logger::log(format!("[DH] Created JValue for level argument: {:?}", jvalue_level));
-
-
-        let PlayerClass = jni_env.find_class("com/interrupt/dungeoneer/entities/Player").unwrap();
-        Logger::log(format!("[DH] PlayerClass pointer: {:?}", PlayerClass));
-        if this_ptr.is_null() {
-            Logger::log("[DH] this_ptr is null!");
-            return jvalue { i: 0 };
-        }
-
-        if level_ptr.is_null() {
-            Logger::log("[DH] level_ptr is null!");
-            return jvalue { i: 0 };
-        }
-
-        if PlayerClass.is_null() {
-            Logger::log("[DH] PlayerClass is null!");
-            return jvalue { i: 0 };
-        }
-        // Call the original Java method using the call_method method
-        let result = jni_env.call_method(
-            //&PlayerClass,
-            &jobject_arg_obj,  // Convert to JObject
-            "Attack",          // Method name
-            "(Lcom/interrupt/dungeoneer/game/Level;)V", // Signature (void return type)
-            &[jvalue_level],    // Arguments
-        );
-
-        match result {
-            Ok(_) => {
-                Logger::log("[DH] Successfully called Player::Attack");
-            }
-            Err(err) => {
-                Logger::log(format!("[DH] Error calling Player::Attack: {:?}", err));
-                // Check for exceptions after the call
-                if let Err(exception) = jni_env.exception_occurred() {
-                    Logger::log(format!("[DH] Exception occurred while calling Player::Attack! {}", exception));
-                    // Clear the exception to prevent further crashes
-                    jni_env.exception_clear().
-                        expect("Failed to clear exception");
-                }
-                Logger::log("[DH] Stack trace: Please check the Java side for issues.");
-            }
-        }
-    }
-
-    // Log after calling the original method
-    Logger::log("[DH] Called original Player::Attack");
-
-    // Return a default jvalue
-    Logger::log("[DH] Returning default jvalue: 0");
-    jvalue { i: 0 }
-}
-*/
-/*
-extern "C" fn hk_player_attack(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
-) -> jvalue {
-    // Safety: Ensure that the JNI pointer is valid and not null
-    let mut jni_env = unsafe {
-        jni::JNIEnv::from_raw(jni).expect("Failed to convert JNIEnv from raw pointer")
-    };
-
-    // Log that the function was called
-    Logger::log("[DH] hk_player_attack called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-
-    // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
-
-    // Log the arguments safely
-    if nargs < 2 {
-        Logger::log("[DH] Not enough arguments provided");
-        return jvalue { i: 0 }; // Return early if arguments are not provided
-    }
-
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        let level_ptr = args_slice[1].l; // Get the `level` pointer
-
-        // Log pointers
-        Logger::log(format!("[DH] thisptr: {:?}", this_ptr));
-        Logger::log(format!("[DH] level: {:?}", level_ptr));
-
-        // Ensure pointers are valid
-        if this_ptr.is_null() {
-            Logger::log("[DH] this_ptr is null!");
-            return jvalue { i: 0 };
-        }
-
-        if level_ptr.is_null() {
-            Logger::log("[DH] level_ptr is null!");
-            return jvalue { i: 0 };
-        }
-        let JniEnv_ref = &*jni;
-        Logger::log(format!("[DH] Acquired JniEnv_ref {:?}", JniEnv_ref));
-        let JNINativeInterf = *(*JniEnv_ref);
-        Logger::log("[DH] Acquired JNINativeInterf");
-        let CallVoidMethodFunc = JNINativeInterf.CallVoidMethod.unwrap();
-        Logger::log(format!("[DH] Acquired func {:p}", CallVoidMethodFunc));
-        Logger::log("[DH] Going to invoke CallVoidMethodFunc...");
-        CallVoidMethodFunc(jni, this_ptr, callable_method);
-        Logger::log("[DH] Invoked CallVoidMethodFunc");
-/*        // Convert raw pointers to JObject references
-        let jobject_arg_obj = JObject::from_raw(this_ptr);
-        let level_ptr_obj = JObject::from_raw(level_ptr);
-
-        // Log the conversion of pointers to JObject
-        Logger::log(format!("[DH] Converted thisptr to JObject: {:?}", jobject_arg_obj));
-        Logger::log(format!("[DH] Converted level_ptr to JObject: {:?}", level_ptr_obj));
-
-        // Create JValue for both arguments
-        let jvalue_this = jni::objects::JValue::from(jobject_arg_obj.as_ref());
-        let jvalue_level = jni::objects::JValue::from(level_ptr_obj.as_ref());
-
-        // Call the original Java method
-        let result = jni_env.call_method(
-            jobject_arg_obj,  // Pass the `this` object
-            "Attack",          // Method name
-            "(Lcom/interrupt/dungeoneer/game/Level;)V", // Signature
-            &[jvalue_level],    // Arguments
-        );
-
-        // Handle the result
-        match result {
-            Ok(_) => {
-                Logger::log("[DH] Successfully called Player::Attack");
-            }
-            Err(err) => {
-                Logger::log(format!("[DH] Error calling Player::Attack: {:?}", err));
-                // Check for exceptions after the call
-                if let Err(exception) = jni_env.exception_occurred() {
-                    Logger::log(format!("[DH] Exception occurred while calling Player::Attack! {}", exception));
-                    // Clear the exception to prevent further crashes
-                    jni_env.exception_clear().expect("Failed to clear exception");
-                }
-            }
-        }*/
-    }
-
-    // Log after calling the original method
-    Logger::log("[DH] Called original Player::Attack");
-
-    // Return a default jvalue
-    jvalue { i: 0 }
-}
-*/
-
-extern "C" fn hk_player_attack(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
-) -> jvalue {
-    // Safety: Ensure that the JNI pointer is valid and not null
-    let mut jni_env = unsafe {
-        jni::JNIEnv::from_raw(jni).expect("Failed to convert JNIEnv from raw pointer")
-    };
-
-    // Log that the function was called
-    Logger::log("[DH] hk_player_attack called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-
-    // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
-
-    // Log the arguments safely
-    if nargs < 2 {
-        Logger::log("[DH] Not enough arguments provided");
-        return jvalue { i: 0 }; // Return early if arguments are not provided
-    }
-
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        let level_ptr = args_slice[1].l; // Get the `level` pointer
-
-        // Log pointers
-        Logger::log(format!("[DH] thisptr: {:?}", this_ptr));
-        Logger::log(format!("[DH] level: {:?}", level_ptr));
-
-        // Ensure pointers are valid
-        if this_ptr.is_null() {
-            Logger::log("[DH] this_ptr is null!");
-            return jvalue { i: 0 };
-        }
-
-        if level_ptr.is_null() {
-            Logger::log("[DH] level_ptr is null!");
-            return jvalue { i: 0 };
-        }
-
-        let JObject_this_ptr = JObject::from_raw(this_ptr);
-        //let JObject_level_ptr = JObject::from_raw(level_ptr);
-        let JMethodID_callable_method = JMethodID::from_raw(callable_method);
-        // Create a jvalue array to hold the arguments
-        //*args
-        let args_attack: [jvalue; 1] = [
-            jvalue {
-                l: level_ptr, // Convert JObject to jvalue
-            },
-        ];
-        jni_env.call_method_unchecked(JObject_this_ptr,
-                                      JMethodID_callable_method,
-                                      ReturnType::Primitive(Primitive::Void),
-                                      &args_attack).expect("Failed to call method unchecked");
-
-        /*
-        let jni_env_ref = &*jni;
-        Logger::log(format!("[DH] Acquired jni_env_ref {:?}", jni_env_ref));
-        let jninative_interf = *(*jni_env_ref);
-        Logger::log("[DH] Acquired jninative_interf");
-        let call_void_method_func = jninative_interf.CallVoidMethod.unwrap();
-        Logger::log(format!("[DH] Acquired func {:p}", call_void_method_func));
-        Logger::log("[DH] Going to invoke call_void_method_func...");
-        Logger::log(format!("callable_method [JMethodID] = {:?}", callable_method));
-        call_void_method_func(jni, (*args).l, callable_method);
-        Logger::log("[DH] Invoked call_void_method_func");
-       */
-
-
-
-
-
-        /*        // Convert raw pointers to JObject references
-                let jobject_arg_obj = JObject::from_raw(this_ptr);
-                let level_ptr_obj = JObject::from_raw(level_ptr);
-
-                // Log the conversion of pointers to JObject
-                Logger::log(format!("[DH] Converted thisptr to JObject: {:?}", jobject_arg_obj));
-                Logger::log(format!("[DH] Converted level_ptr to JObject: {:?}", level_ptr_obj));
-
-                // Create JValue for both arguments
-                let jvalue_this = jni::objects::JValue::from(jobject_arg_obj.as_ref());
-                let jvalue_level = jni::objects::JValue::from(level_ptr_obj.as_ref());
-
-                // Call the original Java method
-                let result = jni_env.call_method(
-                    jobject_arg_obj,  // Pass the `this` object
-                    "Attack",          // Method name
-                    "(Lcom/interrupt/dungeoneer/game/Level;)V", // Signature
-                    &[jvalue_level],    // Arguments
-                );
-
-                // Handle the result
-                match result {
-                    Ok(_) => {
-                        Logger::log("[DH] Successfully called Player::Attack");
-                    }
-                    Err(err) => {
-                        Logger::log(format!("[DH] Error calling Player::Attack: {:?}", err));
-                        // Check for exceptions after the call
-                        if let Err(exception) = jni_env.exception_occurred() {
-                            Logger::log(format!("[DH] Exception occurred while calling Player::Attack! {}", exception));
-                            // Clear the exception to prevent further crashes
-                            jni_env.exception_clear().expect("Failed to clear exception");
-                        }
-                    }
-                }*/
-    }
-
-    // Log after calling the original method
-    Logger::log("[DH] Called original Player::Attack");
-
-    // Return a default jvalue
-    jvalue { i: 0 }
-}
-
+// extern "C" fn hk_player_attack(
+//     jni: *mut jni::JNIEnv,
+//     callable_method: jmethodID,
+//     args: *mut jvalue
+// ) -> jvalue {
+//     Logger::log("[DH] hk_player_attack called!");
+//     if !args.is_null() {
+//         Logger::log(format!("[hk_player_attack] args: {args:#?}"));
+//     }
+//     jvalue { i: 0 }
+// }
 extern "C" fn hk_take_damage(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
+    _jni: *mut JNIEnv,
+    _callable_method: jmethodID,
+    args: *mut jvalue
 ) -> jvalue {
     Logger::log("[DH] hk_take_damage called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-    Logger::log("[DH] Args: ");
-
-    // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
-
-    // Log the arguments safely
-/*    if nargs < 4 {
-        Logger::log("[DH] Not enough arguments provided");
-        return jvalue { i: 0 }; // Return early if arguments are not provided
-    }*/
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        let damage_ptr = args_slice[1].l; // Get the `damage` pointer
-        let damage_type_ptr = args_slice[2].l; // Get the `damageType` pointer
-        let instigator_ptr = args_slice[3].l; // Get the `instigator` pointer
-        Logger::log(format!("[DH]  - this_ptr: {:?}", this_ptr));
-        Logger::log(format!("[DH]  - damage_ptr: {:?}", damage_ptr));
-        Logger::log(format!("[DH]  - damage_type_ptr: {:?}", damage_type_ptr));
-        Logger::log(format!("[DH]  - instigator_ptr: {:?}", instigator_ptr));
+    if !args.is_null() {
+        Logger::log(format!("[hk_take_damage] args: {args:#?}"));
     }
-    return jvalue { i: 0 };
+    jvalue { i: 0 }
 }
 
 extern "C" fn hk_get_walk_speed(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
-    args: *mut jvalue,
+    _jni: *mut JNIEnv,
+    _callable_method: jmethodID,
+    args: *mut jvalue
 ) -> jvalue {
     Logger::log("[DH] hk_get_walk_speed called!");
-    // Logger::log(format!("[DH] Number of args: {}", nargs));
-    // Logger::log("[DH] Args: ");
-
-    // Safety: Convert the raw pointer to a slice
-    // let args_slice = unsafe {
-    //     std::slice::from_raw_parts(args, nargs)
-    // };
-
-    // Log the arguments safely
-/*    if nargs < 1 {
-        Logger::log("[DH] Not enough arguments provided");
-        return jvalue { i: 0 }; // Return early if arguments are not provided
-    }*/
-
-    // unsafe {
-    //     let this_ptr = args_slice[0].l; // Get the `this` pointer
-    //     Logger::log(format!("[DH]  - this_ptr: {:?}", this_ptr));
-    // }
-    return jvalue { f: 0.3f32 }; // Default speed is lower than this
+    if !args.is_null() {
+        Logger::log(format!("[hk_get_walk_speed] args: {args:#?}"));
+    }
+    jvalue { f: 0.3f32 }
 }
 
 
 extern "C" fn hk_get_damage_stat_boost_method(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
+    _jni: *mut JNIEnv,
+    _callable_method: jmethodID,
     args: *mut jvalue
 ) -> jvalue {
-    // Logger::log("[DH] hk_get_damage_stat_boost_method called!");
-    // Logger::log(format!("[DH] Number of args: {}", nargs));
-    // Logger::log("[DH] Args: ");
-
-    //
-    // // Safety: Convert the raw pointer to a slice
-    // let args_slice = unsafe {
-        // std::slice::from_raw_parts(args, nargs)
-    // };
-    // unsafe {
-    //     let this_ptr = args_slice[0].l; // Get the `this` pointer
-    //     Logger::log(format!("[DH] - this_ptr: {:?}", this_ptr));
-    // }
-
-    return jvalue { i: 99999 };
+    Logger::log("[DH] hk_get_damage_stat_boost_method called!");
+    if !args.is_null() {
+        Logger::log(format!("[hk_get_damage_stat_boost_method] args: {args:#?}"));
+    }
+    jvalue { i: 99999 }
 }
 
 extern "C" fn hk_get_attack_speed_stat_boost(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
+    _jni: *mut JNIEnv,
+    _callable_method: jmethodID,
+    args: *mut jvalue
 ) -> jvalue {
     Logger::log("[DH] hk_get_attack_speed_stat_boost called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-    Logger::log("[DH] Args: ");
-
-    // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
-
-    // Log the arguments safely
-    /*    if nargs < 1 {
-            Logger::log("[DH] Not enough arguments provided");
-            return jvalue { i: 0 }; // Return early if arguments are not provided
-        }*/
-
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        Logger::log(format!("[DH] - this_ptr: {:?}", this_ptr));
+    if !args.is_null() {
+        Logger::log(format!("[hk_get_attack_speed_stat_boost] args: {args:#?}"));
     }
-
-    return jvalue { f: 10.0f32 };
+    jvalue { f: 10.0f32 }
 }
 
 extern "C" fn hk_get_magic_resist_mod_boost_method(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
+    _jni: *mut JNIEnv,
+    _callable_method: jmethodID,
+    args: *mut jvalue
 ) -> jvalue {
     Logger::log("[DH] hk_get_magic_resist_mod_boost_method called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-    Logger::log("[DH] Args: ");
-
-    // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
-
-    // Log the arguments safely
-    /*    if nargs < 1 {
-            Logger::log("[DH] Not enough arguments provided");
-            return jvalue { i: 0 }; // Return early if arguments are not provided
-        }*/
-
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        Logger::log(format!("[DH] - this_ptr: {:?}", this_ptr));
+    if !args.is_null() {
+        Logger::log(format!("[hk_get_magic_resist_mod_boost_method] args: {args:#?}"));
     }
-
-    return jvalue { f: 999.0f32 };
+    jvalue { f: 999.0f32 }
 }
 
 extern "C" fn hk_get_magic_stat_boost_method(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
-    args: *mut jvalue,
-    nargs: usize,
-    arg: *mut ::std::os::raw::c_void,
+    _jni: *mut JNIEnv,
+    _callable_method: jmethodID,
+    args: *mut jvalue
 ) -> jvalue {
-    Logger::log("[DH] hk_get_magic_resist_mod_boost_method called!");
-    Logger::log(format!("[DH] Number of args: {}", nargs));
-    Logger::log("[DH] Args: ");
-
-    // Safety: Convert the raw pointer to a slice
-    let args_slice = unsafe {
-        std::slice::from_raw_parts(args, nargs)
-    };
-
-    // Log the arguments safely
-    /*    if nargs < 1 {
-            Logger::log("[DH] Not enough arguments provided");
-            return jvalue { i: 0 }; // Return early if arguments are not provided
-        }*/
-
-    unsafe {
-        let this_ptr = args_slice[0].l; // Get the `this` pointer
-        Logger::log(format!("[DH] - this_ptr: {:?}", this_ptr));
+    Logger::log("[DH] hk_get_magic_stat_boost_method called!");
+    if !args.is_null() {
+        Logger::log(format!("[hk_get_magic_stat_boost_method] args: {args:#?}"));
     }
-
-    return jvalue { i: 99999 };
+    jvalue { i: 99999 }
 }
 
 extern "C" fn hk_get_defense_stat_boost_method(
-    jni: *mut JNIEnv,
-    callable_method: jmethodID,
+    _jni: *mut JNIEnv,
+    _callable_method: jmethodID,
     args: *mut jvalue
 ) -> jvalue {
-    // Logger::log("[DH] hk_get_magic_resist_mod_boost_method called!");
-    // Logger::log(format!("[DH] Number of args: {}", nargs));
-    // Logger::log("[DH] Args: ");
-    // 
-    // // Safety: Convert the raw pointer to a slice
-    // let args_slice = unsafe {
-    //     std::slice::from_raw_parts(args, nargs)
-    // };
-
-    // Log the arguments safely
-    /*    if nargs < 1 {
-            Logger::log("[DH] Not enough arguments provided");
-            return jvalue { i: 0 }; // Return early if arguments are not provided
-        }*/
-
-    // unsafe {
-    //     let this_ptr = args_slice[0].l; // Get the `this` pointer
-    //     Logger::log(format!("[DH] - this_ptr: {:?}", this_ptr));
-    // }
-
-    return jvalue { i: 99999 };
+    Logger::log("[DH] hk_get_defense_stat_boost_method called!");
+    if !args.is_null() {
+        Logger::log(format!("[hk_get_defense_stat_boost_method] args: {args:#?}"));
+    }
+    jvalue { i: 99999 }
 }
 
-
 pub unsafe fn entry() {
-
+    let mut jvm: OnceCell<jni::JavaVM> = OnceCell::new();
+    let mut java_thread: OnceCell<AttachGuard> = OnceCell::new();
     Logger::log("Attached to javaw.exe");
-
     let file = OpenOptions::new()
         .write(true)
         .read(true)
         .open("CONOUT$")
         .unwrap();
-    let _ = winapi::um::processenv::SetStdHandle(winapi::um::winbase::STD_OUTPUT_HANDLE, file.as_raw_handle() as *mut winapi::ctypes::c_void);
+    let _ = winapi::um::processenv::SetStdHandle(winapi::um::winbase::STD_OUTPUT_HANDLE, file.as_raw_handle() as *mut c_void);
 
     Logger::log("Set STD output handle");
 
@@ -614,100 +161,150 @@ pub unsafe fn entry() {
     match java_vm_res
     {
         Ok(java_vm) => {
-            JAVA_VM = Some(java_vm);
+            jvm = OnceCell::from(java_vm);
         }
         Err(err) => {
             Logger::log_fmt(format_args!("Failed to retrieve JavaVM pointer: {:?}", err));
         }
     }
-    let env_res = JAVA_VM.as_ref().unwrap().attach_current_thread();
+    let env_res = jvm.wait().attach_current_thread(); //java_vm.get_mut().unwrap().attach_current_thread();
     match env_res
     {
         Ok(env) => {
-            ENV = Some(env);
+            java_thread = OnceCell::from(env);
         }
         Err(err) => {
             Logger::log_fmt(format_args!("Failed to retrieve JNI environment: {:?}", err));
         }
     }
 
-    //Logger::log(format!("ENV = {:?}", ENV.unwrap()));
     Logger::log("Set Global vars");
-    if let Some(ref vm) = JAVA_VM {
-        let b = vm;
-        let a = b.get_java_vm_pointer();
-        if let Some(ref mut jnienv) = ENV {
-            let player_class = jnienv.find_class("com/interrupt/dungeoneer/entities/Player").unwrap();
-            let pc_ref:&JClass = player_class.as_ref();
+        let vm_ptr = jvm.wait().get_java_vm_pointer();
+
+        let jnienv = java_thread.get_mut().unwrap();
+
             //TODO fix attackmethod hook
-            /*let AttackMethod = jnienv.get_method_id(pc_ref, "Attack", "(Lcom/interrupt/dungeoneer/game/Level;)V").unwrap();*/
-            let take_damage_method = jnienv.get_method_id(pc_ref, "takeDamage", "(ILcom/interrupt/dungeoneer/entities/items/Weapon$DamageType;Lcom/interrupt/dungeoneer/entities/Entity;)I").unwrap();
-            let get_walk_speed_method = jnienv.get_method_id(pc_ref, "getWalkSpeed", "()F").unwrap();
-            let get_damage_stat_boost_method = jnienv.get_method_id(pc_ref, "getDamageStatBoost", "()I").unwrap();
-            let get_attack_speed_stat_boost_method = jnienv.get_method_id(pc_ref, "getAttackSpeedStatBoost", "()F").unwrap();
-            let get_magic_resist_mod_boost_method = jnienv.get_method_id(pc_ref, "getMagicResistModBoost", "()F").unwrap();
-            let get_magic_stat_boost_method = jnienv.get_method_id(pc_ref, "getMagicStatBoost", "()I").unwrap();
-            let get_defense_stat_boost_method = jnienv.get_method_id(pc_ref, "getDefenseStatBoost", "()I").unwrap();
-            let jnihook_init_res = JNIHook_Init(a);
-            if jnihook_init_res == JNI_OK
-            {
-                Logger::log("Successfully initialized JNIHook!");
-            }
-            else
-            {
-                Logger::log("Failed to initialize JNIHook!");
+            // let Attack_method = jnienv.get_method_id(
+            //     "com/interrupt/dungeoneer/entities/Player", "Attack",
+            //     "(Lcom/interrupt/dungeoneer/game/Level;)V"
+            // ).unwrap();
+            //TODO fix movespeed hook
+            // let get_walk_speed_method = jnienv.get_method_id(pc_ref, "getWalkSpeed", "()F").unwrap();
+
+            let take_damage_method = jnienv.get_method_id(
+                "com/interrupt/dungeoneer/entities/Player", "takeDamage",
+                "(ILcom/interrupt/dungeoneer/entities/items/Weapon$DamageType;Lcom/interrupt/dungeoneer/entities/Entity;)I"
+            ).unwrap();
+
+            let get_attack_speed_stat_boost_method = jnienv.get_method_id(
+                "com/interrupt/dungeoneer/entities/Player", "getAttackSpeedStatBoost",
+                "()F"
+            ).unwrap();
+
+            let get_magic_resist_mod_boost_method = jnienv.get_method_id(
+                "com/interrupt/dungeoneer/entities/Player", "getMagicResistModBoost",
+                "()F"
+            ).unwrap();
+
+            let get_magic_stat_boost_method = jnienv.get_method_id(
+                "com/interrupt/dungeoneer/entities/Player", "getMagicStatBoost",
+                "()I"
+            ).unwrap();
+
+            let get_damage_stat_boost_method = jnienv.get_method_id(
+                "com/interrupt/dungeoneer/entities/Player", "getDamageStatBoost",
+                "()I"
+            ).unwrap();
+
+            let get_defense_stat_boost_method = jnienv.get_method_id(
+                "com/interrupt/dungeoneer/entities/Player", "getDefenseStatBoost",
+                "()I"
+            ).unwrap();
+
+            let jnihook_init_res = JNIHook_Init(vm_ptr);
+            match jnihook_init_res {
+                jnihook_result_t_JNIHOOK_OK => {
+                    Logger::log("[JNIHOOK_OK] Successfully initialized JNIHook!");
+                }
+                jnihook_result_t_JNIHOOK_ERR_GET_JNI => {
+                    Logger::log("[JNIHOOK_ERR_GET_JNI] Failed to get JNI interface");
+                }
+                jnihook_result_t_JNIHOOK_ERR_GET_JVMTI => {
+                    Logger::log("[JNIHOOK_ERR_GET_JVMTI] Failed to get JVMTI interface");
+                }
+                jnihook_result_t_JNIHOOK_ERR_ADD_JVMTI_CAPS => {
+                    Logger::log("[JNIHOOK_ERR_ADD_JVMTI_CAPS] Failed to add JVMTI capabilities");
+                }
+                jnihook_result_t_JNIHOOK_ERR_SETUP_CLASS_FILE_LOAD_HOOK => {
+                    Logger::log("[JNIHOOK_ERR_SETUP_CLASS_FILE_LOAD_HOOK] Failed to setup class file load hook");
+                }
+                jnihook_result_t_JNIHOOK_ERR_JNI_OPERATION => {
+                    Logger::log("[JNIHOOK_ERR_JNI_OPERATION] JNI operation failed");
+                }
+                jnihook_result_t_JNIHOOK_ERR_JVMTI_OPERATION => {
+                    Logger::log("[JNIHOOK_ERR_JVMTI_OPERATION] JVMTI operation failed");
+                }
+                jnihook_result_t_JNIHOOK_ERR_CLASS_FILE_CACHE => {
+                    Logger::log("[JNIHOOK_ERR_CLASS_FILE_CACHE] Class file cache error");
+                }
+                jnihook_result_t_JNIHOOK_ERR_JAVA_EXCEPTION => {
+                    Logger::log("[JNIHOOK_ERR_JAVA_EXCEPTION] Java exception occurred during initialization");
+                }
+                _ => {
+                    Logger::log(&format!("[UNKNOWN_ERROR] Unknown error code: {}", jnihook_init_res));
+                }
             }
 
             let mut hkresult: jint;
             //TODO fix attackmethod hook
-/*            hkresult = JNIHook_Attach(AttackMethod.into_raw(),
-                                      Some(hk_player_attack),
-                                      std::ptr::null_mut());
-            Logger::log(format!("[DH] Player::Attack Hook Result: {}", hkresult));
-*/
-            // JNIHook_Attach();
-            // hkresult = JNIHook_Attach(take_damage_method.into_raw(),
-            //                           hk_take_damage as *mut c_void,
+
+            // hkresult = JNIHook_Attach(Attack_method.into_raw(),
+            //                           hk_player_attack as *mut c_void,
             //                           std::ptr::null_mut());
-            // Logger::log(format!("[DH] Player::takeDamage Hook Result: {}", hkresult));
+            // Logger::log(format!("[DH] Player::Attack Hook Result: {}", hkresult));
+
             // hkresult = JNIHook_Attach(get_walk_speed_method.into_raw(),
             //                           hk_get_walk_speed as *mut c_void,
             //                           std::ptr::null_mut());
             // Logger::log(format!("[DH] Player::getWalkSpeed Hook Result: {}", hkresult));
 
+            hkresult = JNIHook_Attach(take_damage_method.into_raw(),
+                                      hk_take_damage as *mut c_void,
+                                      std::ptr::null_mut());
+            Logger::log(format!("[DH] Player::takeDamage Hook Result: {}", hkresult));
             hkresult = JNIHook_Attach(get_damage_stat_boost_method.into_raw(),
                                       hk_get_damage_stat_boost_method as *mut c_void,
                                       std::ptr::null_mut());
             Logger::log(format!("[DH] Player::getDamageStatBoost Hook Result: {}", hkresult));
-            // hkresult = JNIHook_Attach(get_attack_speed_stat_boost_method.into_raw(),
-            //                           hk_get_attack_speed_stat_boost as *mut c_void,
-            //                           std::ptr::null_mut());
-            // Logger::log(format!("[DH] Player::getAttackSpeedStatBoost Hook Result: {}", hkresult));
-            // hkresult = JNIHook_Attach(get_magic_resist_mod_boost_method.into_raw(),
-            //                           hk_get_magic_resist_mod_boost_method as *mut c_void,
-            //                           std::ptr::null_mut());
-            // Logger::log(format!("[DH] Player::get_magic_resist_mod_boost_method Hook Result: {}", hkresult));
-            // hkresult = JNIHook_Attach(get_magic_stat_boost_method.into_raw(),
-            //                           hk_get_magic_stat_boost_method as *mut c_void,
-            //                           std::ptr::null_mut());
-            // Logger::log(format!("[DH] Player::get_magic_stat_boost_method Hook Result: {}", hkresult));
+            hkresult = JNIHook_Attach(get_attack_speed_stat_boost_method.into_raw(),
+                                      hk_get_attack_speed_stat_boost as *mut c_void,
+                                      std::ptr::null_mut());
+            Logger::log(format!("[DH] Player::getAttackSpeedStatBoost Hook Result: {}", hkresult));
+            hkresult = JNIHook_Attach(get_magic_resist_mod_boost_method.into_raw(),
+                                      hk_get_magic_resist_mod_boost_method as *mut c_void,
+                                      std::ptr::null_mut());
+            Logger::log(format!("[DH] Player::get_magic_resist_mod_boost_method Hook Result: {}", hkresult));
+            hkresult = JNIHook_Attach(get_magic_stat_boost_method.into_raw(),
+                                      hk_get_magic_stat_boost_method as *mut c_void,
+                                      std::ptr::null_mut());
+            Logger::log(format!("[DH] Player::get_magic_stat_boost_method Hook Result: {}", hkresult));
             hkresult = JNIHook_Attach(get_defense_stat_boost_method.into_raw(),
                                       hk_get_defense_stat_boost_method as *mut c_void,
                                       std::ptr::null_mut());
             Logger::log(format!("[DH] Player::get_defense_stat_boost_method Hook Result: {}", hkresult));
-        }
-        else {
-            // Handle the case where JAVA_VM is None
-            Logger::log("[PANIC] JNIENV is None!!!");
-        }
+        // }
+        // else {
+            // Handle the case where java_vm is None
+            // Logger::log("[PANIC] JNIENV is None!!!");
+        // }
         //let mut a: JavaVM = jni::sys::JavaVM::from(b.get_java_vm_pointer()).expect("REASON");
 
         //JNIHook_Init(&mut a);
         //JNIHook_Init(&mut a);
-    } else {
-        // Handle the case where JAVA_VM is None
-        Logger::log("[PANIC] JAVA_VM is None!!!");
-    }
+    // } else {
+        // Handle the case where java_vm is None
+        // Logger::log("[PANIC] java_vm is None!!!");
+    // }
     //Logger::log("Retrieving Class Loader...");
 
     //CLASS_LOADER = crate::util::jvm::get_class_loader();
@@ -733,7 +330,7 @@ pub unsafe fn entry() {
 
     Logger::log("Looping...");
 
-    let loop_thread = std::thread::spawn(|| {
+    let _loop_thread = std::thread::spawn(|| {
         Logger::log("Quitted loop thread");
     });
 

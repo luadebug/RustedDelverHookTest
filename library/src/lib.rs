@@ -17,7 +17,6 @@ pub mod util {
     pub mod jvm;
     pub mod logger;
     pub mod mappings;
-    pub mod jni;
 }
 
 pub mod hooks {
@@ -38,9 +37,7 @@ pub mod keys {
 }
 
 pub mod sdk {
-    pub mod minecraft;
     pub mod entity;
-    pub mod player;
     pub mod retrievable;
 }
 

@@ -178,7 +178,7 @@ impl<T> OpenGLApp<T> {
             }
 
             let client_rect = self.poll_client_rect(this);
-            let clipped_shapes = this.ctx.tessellate(output.shapes);
+            let clipped_shapes = this.ctx.tessellate(output.shapes, 1.0f32);
             this.painter.paint_and_update_textures(
                 1.0,
                 &clipped_shapes,

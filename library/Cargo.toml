@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies.windows]
-version = "0.58.0"
+version = "0.61.1"
 features = [
     "Win32_Foundation",
     "Win32_Graphics",
@@ -25,13 +25,13 @@ features = [
 ]
 
 [dependencies]
-jnihook-sys = { version = "0.1.0", path = "../jnihook-sys", default-features = false }
-once_cell = "1.19.0"
+once_cell = "1.21.3"
 parking_lot = "0.12.3"
-gl = "0.14"
-retour = { version = "0.3.1", features = ["static-detour"] }
-egui = "0.21.0"
+gl = "0.14.0"
+retour = { version = "0.3.0", features = ["static-detour"] }
+egui = "0.31.1"
 clipboard = "0.5.0"
 win_key_codes = "0.1.2"
 jni = "0.21.1"
-winapi = { version = "0.3.9", features = ["libloaderapi", "consoleapi", "minwindef", "processenv", "winbase", "handleapi", "wingdi", "windef", "winuser"] }
+winsafe = { version = "0.0.23", features = ["kernel"] }
+winapi = { version = "0.3.9", features = ["libloaderapi", "consoleapi", "minwindef", "processenv", "winbase", "handleapi", "wingdi", "windef", "winuser", "wincon"] }
